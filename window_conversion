@@ -1,0 +1,54 @@
+#!/home/samhaug/anaconda2/bin/python
+import numpy as np
+import seispy
+import obspy
+from matplotlib import pyplot as plt
+import matplotlib.gridspec as gridspec
+
+st = obspy.read('final_sparse_data.pk')
+st = seispy.data.normalize_on_phase(st,phase=['S'])
+
+data_list = []
+gcarc_list = []
+name_list = []
+st.remove(st[2])
+st.remove(st[-1])
+
+for tr in st:
+    srate = tr.stats.sampling_rate
+    imax = np.argmax(tr.data[7000:9000])
+    data = tr.data[7000+imax-8*srate:7000+imax+8*srate]
+    data_list.append(data)
+    name_list.append(tr.stats.station)
+    gcarc_list.append(str(np.round(tr.stats.sac['gcarc'],1)))
+
+t = np.linspace(-8,8,num=len(data_list[0]))
+
+gs = gridspec.GridSpec(60,80)
+fig = plt.figure(figsize=(8,6))
+fig.patch.set_visible(False)
+ax = plt.subplot(gs[:,0:30])
+ax1 = plt.subplot(gs[:,40::])
+ax.set_xlim(-4,4)
+ax.set_ylim(-2,21)
+ax1.set_xlim(-50,50)
+ax1.set_ylim(-2,21)
+
+for b in [ax,ax1]:
+    b.spines['top'].set_visible(False)
+    b.spines['right'].set_visible(False)
+    b.spines['left'].set_visible(False)
+    b.yaxis.set_ticklabels([])
+    b.yaxis.set_ticks([])
+    b.tick_params(axis='both', which='major', labelsize=7)
+
+for idx, ii in enumerate(data_list):
+    s = seispy.data.phase_window(st[idx],['S'],(-50,50)).data
+    ts = np.linspace(-50,50,num=len(s))
+    ax.plot(t,2*idx+ii,color='k')
+    ax1.plot(ts,2*idx+s,color='k')
+    ax.text(-3.5,2*idx+0.2,gcarc_list[idx]+r'$^{\circ}$',size=8)
+    ax.text(3.5,2*idx+0.2,name_list[idx],size=8)
+    ax.plot(ts,2*idx+s,color='b',alpha=0.5)
+
+plt.show()

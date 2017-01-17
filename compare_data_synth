@@ -1,0 +1,52 @@
+#!//home/samhaug/anaconda2/bin/python
+
+import numpy as np
+import obspy
+import seispy
+from sys import argv
+from obspy.taup import TauPyModel
+from matplotlib import pyplot as plt
+model = TauPyModel(model='prem_50')
+
+data = obspy.read(argv[1])
+st = obspy.read(argv[2])
+st.differentiate()
+st = seispy.data.normalize_on_phase(st,phase=['S'])
+for tr in st:
+    tr.stats.location = tr.stats.sac['gcarc']
+st.sort(['location'])
+for tr in data:
+    tr.stats.location = tr.stats.sac['gcarc']
+data.sort(['location'])
+
+
+data_list = []
+synth_list = []
+for idx,tr in enumerate(data):
+    start_d = tr.stats.starttime
+    arrivals_d = model.get_travel_times(
+                   distance_in_degree=tr.stats.sac['gcarc'],
+                   source_depth_in_km = tr.stats.sac['evdp'],
+                   phase_list = ['S1800P'])
+
+    w_s_d = start_d+arrivals_d[0].time-6
+    w_e_d = start_d+arrivals_d[0].time+3
+    data_list.append(tr.slice(w_s_d,w_e_d).data)
+
+    start_s = st[idx].stats.starttime
+    arrivals_s = model.get_travel_times(
+                   distance_in_degree=st[idx].stats.sac['gcarc'],
+                   source_depth_in_km = st[idx].stats.sac['evdp'],
+                   phase_list = ['S1900P'])
+
+    w_s_s = start_s+arrivals_s[0].time-8
+    w_e_s = start_s+arrivals_s[0].time+1
+    synth_list.append(st[idx].slice(w_s_s,w_e_s).data)
+    #print tr.stats.station, st[idx].stats.station
+    #print tr.stats.location, st[idx].stats.location
+
+for idx,ii in enumerate(synth_list):
+    plt.plot(ii+idx,color='k')
+    plt.plot(idx+data_list[idx],color='b')
+plt.show()
+

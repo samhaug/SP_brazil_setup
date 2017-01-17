@@ -1,0 +1,124 @@
+#!/home/samhaug/anaconda2/bin/python
+import numpy as np
+import seispy
+import obspy
+from matplotlib import pyplot as plt
+import matplotlib.gridspec as gridspec
+from obspy.taup import TauPyModel
+model = TauPyModel(model="prem_50")
+
+stz = obspy.read('BHZ.pk')
+stn = obspy.read('BHN.pk')
+ste = obspy.read('BHE.pk')
+
+def prep_stream(st):
+    for tr in st:
+        tr.stats.location = tr.stats.sac['gcarc']
+    st.sort(['location'])
+    st.filter('highpass',freq=0.07)
+    st = seispy.filter.interp_filter(st,interp=40)
+    st = seispy.filter.gimp_filter(st)
+    #st.differentiate()
+    st = seispy.data.slant(st,0.5)
+    return st
+
+for st in [stz,stn,ste]:
+    st = prep_stream(st)
+
+gs = gridspec.GridSpec(95,115)
+fig = plt.figure(figsize=(8,10))
+fig.patch.set_visible(False)
+
+axz = plt.subplot(gs[0:45,0:35])
+axn = plt.subplot(gs[0:45,40:75])
+axe = plt.subplot(gs[0:45,80:115])
+
+axl = plt.subplot(gs[50::,0:35])
+axq = plt.subplot(gs[50::,40:75])
+axt = plt.subplot(gs[50::,80:115])
+
+ax_list = [axz,axn,axe,axl,axq,axt]
+name_list = ['BHZ','BHN','BHE','BHL','BHQ','BHT']
+
+for idx,b in enumerate(ax_list):
+
+    b.spines['top'].set_visible(False)
+    b.spines['right'].set_visible(False)
+    b.spines['left'].set_visible(False)
+    b.yaxis.set_ticklabels([])
+    b.yaxis.set_ticks([])
+    b.tick_params(axis='both', which='major', labelsize=7)
+    b.set_xlim(-10,10)
+    b.set_ylim(-2,18)
+    b.set_title(name_list[idx],size=10)
+    b.xaxis.set_ticks_position('bottom')
+
+for idx,st in enumerate([stz,stn,ste]):
+
+    for idy,tr in enumerate(st):
+        gcarc = str(np.round(tr.stats.sac['gcarc'],1))
+        az = str(np.round(tr.stats.sac['az'],1))
+        name = tr.stats.station
+        srate = tr.stats.sampling_rate
+        s = tr.data[7500:8500]
+        time =len(s)/srate
+        s = s/np.abs(s).max()
+        ts = np.linspace(-1*time/2.,time/2.,num=len(s))
+        ax_list[idx].plot(ts,2*idy+s,color='k',lw=0.5)
+        ax_list[idx].text(-20,2*idy+0.35,r'$\Delta =$'+gcarc+r'$^{\circ}$',size=5)
+        ax_list[idx].text(20,2*idy+0.35,r'$az =$'+az+r'$^{\circ}$',size=5)
+        ax_list[idx].text(-48,2*idy+0.35,name,size=5)
+
+for idx in range(0,len(stz)):
+
+    baz = np.radians(stz[idx].stats.sac['baz'])
+    gcarc = stz[idx].stats.sac['gcarc']
+    az = st[idx].stats.sac['az']
+    h = stz[idx].stats.sac['evdp']
+    arrivals = model.get_travel_times(source_depth_in_km=h,
+                                      distance_in_degree=gcarc,
+                                      phase_list=['S'])
+    name = stz[idx].stats.station
+
+    #zdat = seispy.data.phase_window(stz[idx],['S1800P'],(-10,10)).data
+    zdat = stz[idx].data[7500:8500]
+    #ndat = seispy.data.phase_window(stn[idx],['S1800P'],(-10,10)).data
+    ndat = stn[idx].data[7500:8500]
+    #edat = seispy.data.phase_window(ste[idx],['S1800P'],(-10,10)).data
+    edat = ste[idx].data[7500:8500]
+
+    i = np.radians(arrivals[0].incident_angle)
+
+    R = np.matrix([[np.cos(i),-1*np.sin(i)*np.sin(baz),-1*np.sin(i)*np.cos(baz)],
+                   [np.sin(i),np.cos(i)*np.sin(baz),np.cos(i)*np.cos(baz)],
+                   [0,-1*np.cos(baz),np.sin(baz)],
+                  ])
+
+    zen = [zdat,edat,ndat]
+
+    lqt = (R*zen)
+    ldat,qdat,tdat = np.array(lqt[0])[0,:],np.array(lqt[1])[0,:],np.array(lqt[2])[0,:]
+    ldat = ldat/np.abs(ldat).max()
+    qdat = qdat/np.abs(qdat).max()
+    tdat = tdat/np.abs(tdat).max()
+
+    ts = np.linspace(-10,10,num=len(ldat))
+    axl.plot(ts,2*idx+ldat,color='k',lw=0.5)
+    axq.plot(ts,2*idx+qdat,color='k',lw=0.5)
+    axt.plot(ts,2*idx+tdat,color='k',lw=0.5)
+    axl.text(-20,2*idx+0.35,r'$\Delta =$'+str(np.round(gcarc,1))+r'$^{\circ}$',size=5)
+    axl.text(20,2*idx+0.35,r'$az =$'+str(np.round(az,1))+r'$^{\circ}$',size=5)
+    axl.text(-48,2*idx+0.35,name,size=5)
+    axq.text(-20,2*idx+0.35,r'$\Delta =$'+str(np.round(gcarc,1))+r'$^{\circ}$',size=5)
+    axq.text(20,2*idx+0.35,r'$az =$'+str(np.round(az,1))+r'$^{\circ}$',size=5)
+    axq.text(-48,2*idx+0.35,name,size=5)
+    axt.text(-20,2*idx+0.35,r'$\Delta =$'+str(np.round(gcarc,1))+r'$^{\circ}$',size=5)
+    axt.text(20,2*idx+0.35,r'$az =$'+str(np.round(az,1))+r'$^{\circ}$',size=5)
+    axt.text(-48,2*idx+0.35,name,size=5)
+
+plt.show()
+
+
+
+
+

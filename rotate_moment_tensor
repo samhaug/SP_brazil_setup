@@ -1,0 +1,279 @@
+#!/home/samhaug/anaconda2/bin/python
+import numpy as np
+import matplotlib.pylab as plt
+from sys import argv
+import obspy
+import seispy
+
+
+def main():
+
+    def find_euler_pole(station_coord):
+        '''
+        station_coord = [x,y,z] of station
+        '''
+        z = [0,0,1]
+        euler_pole = np.cross(station_coord,z)
+
+        return euler_pole
+
+    def convert_cart(lat,lon):
+        '''
+        convert lat/lon coordinates to normalized [x,y,z]
+        '''
+        #x = np.cos(np.radians(lat))*np.cos(np.radians(lon))
+        #y = np.cos(np.radians(lat))*np.sin(np.radians(lon))
+        #z = np.sin(np.radians(lat))
+        lat = np.pi/2. - np.radians(lat)
+        lon = np.radians(lon)
+        x = np.sin(lat)*np.sin(lon)
+        y = np.cos(lat)
+        z = np.sin(lat)*np.cos(lon)
+
+        return [x,y,z]
+
+
+    def cartesian_to_spherical(x,degrees=True,normalize=False):
+        '''
+        Coverts a cartesian vector in R3 to spherical coordinates
+        '''
+        r = np.linalg.norm(x)
+        theta = np.arccos(x[2]/r)
+        phi = np.arctan2(x[1],x[0])
+
+        if degrees:
+           theta = np.degrees(theta)
+           phi = np.degrees(phi)
+
+        s = [r,theta,phi]
+
+        if normalize:
+           s /= np.linalg.norm(s)
+
+        return s
+
+    def spherical_to_cartesian(s,degrees=True,normalize=False):
+        '''
+        Takes a vector in spherical coordinates and converts it to cartesian.
+        Assumes the input vector is given as [radius,colat,lon]
+        '''
+
+        if degrees:
+           s[1] = np.radians(s[1])
+           s[2] = np.radians(s[2])
+
+        x1 = s[0]*np.sin(s[1])*np.cos(s[2])
+        x2 = s[0]*np.sin(s[1])*np.sin(s[2])
+        x3 = s[0]*np.cos(s[1])
+
+        x = [x1,x2,x3]
+
+        if normalize:
+           x /= np.linalg.norm(x)
+        return x
+
+    def find_rotation_vector(s1,s2):
+        '''
+        Takes two vectors in spherical coordinates, and returns the cross product,
+        normalized to one.
+        '''
+
+        x1 = spherical_to_cartesian(s1,degrees=True,normalize=True)
+        x2 = spherical_to_cartesian(s2,degrees=True,normalize=True)
+        n = np.cross(x1,x2)
+        n /= np.linalg.norm(n)
+        return n
+
+    def find_rotation_angle(s1,s2,degrees=True):
+        '''
+        Finds the angle between two vectors in spherical coordinates
+        params:
+        s1,s2: vectors in spherical coordinates
+
+        returns
+        '''
+        x1 = spherical_to_cartesian(s1,degrees=True,normalize=True)
+        x2 = spherical_to_cartesian(s2,degrees=True,normalize=True)
+        if degrees:
+           return np.degrees(np.arccos(np.clip(np.dot(x1,x2),-1.0,1.0)))
+        else:
+           return np.arccos(np.clip(np.dot(x1,x2),-1.0,1.0))
+
+    def write_rotated_cmt(M,lat,lon,h):
+        '''
+        '''
+        f = open('CMTSOLUTION_rotate','w')
+        f.write('top \n')
+        f.write('event name:     {}\n'.format('NAME'))
+        f.write('time shift:     {}\n'.format('1.0800'))
+        f.write('half duration:     {}\n'.format('2.5000'))
+        f.write('latitude:     {}\n'.format(str(lat)))
+        f.write('longitude:     {}\n'.format(str(lon)))
+        f.write('depth:     {}\n'.format(str(h)))
+        f.write('Mrr:     {}\n'.format(str(M[2,2])))
+        f.write('Mtt:     {}\n'.format(str(M[0,0])))
+        f.write('Mpp:     {}\n'.format(str(M[1,1])))
+        f.write('Mrt:     {}\n'.format(str(M[0,2])))
+        f.write('Mrp:     {}\n'.format(str(M[1,2])))
+        f.write('Mtp:     {}\n'.format(str(M[1,0])))
+        f.close()
+
+    cmt = np.genfromtxt(argv[1],skip_header=1,delimiter=':')
+    colat = 90.-cmt[3,1]
+    lat = cmt[3,1]
+    lon = cmt[4,1]
+    h   = cmt[5,1]
+    mrr = cmt[6,1]
+    mtt = cmt[7,1]
+    mpp = cmt[8,1]
+    mrt = cmt[9,1]
+    mrp = cmt[10,1]
+    mtp = cmt[11,1]
+
+    '''
+    M=[Mtt Mtp Mtr
+       Mtp Mpp Mpr
+       Mtr Mpr Mrr]
+    '''
+
+    M = np.matrix([[mtt,mtp,mrt],[mtp,mpp,mrp],[mrt,mrp,mrr]])
+
+    north_pole = [6371,0,0]
+    source_coord = [6371,colat,lon]
+    n = find_rotation_vector(source_coord,north_pole)
+    source_coord = [6371,colat,lon]
+    north_pole = [6371,0,0]
+    phi = find_rotation_angle(source_coord,north_pole)
+    #phi = find_rotation_angle(north_pole,source_coord)
+    print n, phi
+    rot_m,s_colat_new,s_lon_new = rotate_moment_tensor(n,phi,colat,lon,M)
+    print rot_m
+
+    st = obspy.read(argv[2])
+    for tr in st:
+        stla = tr.stats.sac['stla']
+        stlo = tr.stats.sac['stlo']
+        colat_new,lon_new = rotate_coordinates(n,phi,90.-stla,stlo)
+        lat_new = -1*(colat_new-90)
+        tr.stats.sac['stla'] = lat_new
+        tr.stats.sac['stlo'] = lon_new
+        tr.stats.sac['evla'] = -1*(s_colat_new-90)
+        tr.stats.sac['evlo'] = s_lon_new
+    #seispy.mapplot.source_reciever_plot(st)
+    seispy.convert.axisem_stations(st)
+    write_rotated_cmt(rot_m,-1*(s_colat_new-90),s_lon_new,h)
+
+###################################################################################################
+#- rotation matrix
+###################################################################################################
+
+def rotation_matrix(n,phi):
+
+  """ compute rotation matrix
+  input: rotation angle phi [deg] and rotation vector n normalised to 1
+  return: rotation matrix
+  """
+
+  phi=np.pi*phi/180.0
+
+  A=np.array([ (n[0]*n[0],n[0]*n[1],n[0]*n[2]), (n[1]*n[0],n[1]*n[1],n[1]*n[2]), (n[2]*n[0],n[2]*n[1],n[2]*n[2])])
+  B=np.eye(3)
+  C=np.array([ (0.0,-n[2],n[1]), (n[2],0.0,-n[0]), (-n[1],n[0],0.0)])
+
+  R=(1.0-np.cos(phi))*A+np.cos(phi)*B+np.sin(phi)*C
+
+  return np.matrix(R)
+
+
+###################################################################################################
+#- rotate coordinates
+###################################################################################################
+
+def rotate_coordinates(n,phi,colat,lon):
+
+  """ rotate colat and lon
+  input: rotation angle phi [deg] and rotation vector n normalised to 1, original colatitude and longitude [deg]
+  return: colat_new [deg], lon_new [deg]
+  """
+
+  # convert to radians
+
+  colat=np.pi*colat/180.0
+  lon=np.pi*lon/180.0
+
+  # rotation matrix
+
+  R=rotation_matrix(n,phi)
+
+  # original position vector
+
+  x=np.matrix([[np.cos(lon)*np.sin(colat)], [np.sin(lon)*np.sin(colat)], [np.cos(colat)]])
+
+  # rotated position vector
+
+  y=R*x
+
+  # compute rotated colatitude and longitude
+
+  colat_new=np.arccos(y[2])
+  lon_new=np.arctan2(y[1],y[0])
+
+  return float(180.0*colat_new/np.pi), float(180.0*lon_new/np.pi)
+
+
+###################################################################################################
+#- rotate moment tensor
+###################################################################################################
+
+def rotate_moment_tensor(n,phi,colat,lon,M):
+
+  """ rotate moment tensor
+  input: rotation angle phi [deg] and rotation vector n normalised to 1, original colat and lon [deg], original moment tensor M as matrix
+  M=[Mtt Mtp Mtr
+     Mtp Mpp Mpr
+     Mtr Mpr Mrr]
+  return: rotated moment tensor
+  """
+
+  # rotation matrix
+
+  R=rotation_matrix(n,phi)
+
+  # rotated coordinates
+
+  colat_new,lon_new=rotate_coordinates(n,phi,colat,lon)
+
+  # transform to radians
+
+  colat=np.pi*colat/180.0
+  lon=np.pi*lon/180.0
+
+  colat_new=np.pi*colat_new/180.0
+  lon_new=np.pi*lon_new/180.0
+
+  # original basis vectors with respect to unit vectors [100].[010],[001]
+
+  bt=np.matrix([[np.cos(lon)*np.cos(colat)],[np.sin(lon)*np.cos(colat)],[-np.sin(colat)]])
+  bp=np.matrix([[-np.sin(lon)],[np.cos(lon)],[0.0]])
+  br=np.matrix([[np.cos(lon)*np.sin(colat)],[np.sin(lon)*np.sin(colat)],[np.cos(colat)]])
+
+  # original basis vectors with respect to rotated unit vectors
+
+  bt=R*bt
+  bp=R*bp
+  br=R*br
+
+  # new basis vectors with respect to rotated unit vectors
+
+  bt_new=np.matrix([[np.cos(lon_new)*np.cos(colat_new)],[np.sin(lon_new)*np.cos(colat_new)],[-np.sin(colat_new)]])
+  bp_new=np.matrix([[-np.sin(lon_new)],[np.cos(lon_new)],[0.0]])
+  br_new=np.matrix([[np.cos(lon_new)*np.sin(colat_new)],[np.sin(lon_new)*np.sin(colat_new)],[np.cos(colat_new)]])
+
+  # assemble transformation matrix and return
+
+  A=np.matrix([[float(bt_new.transpose()*bt), float(bt_new.transpose()*bp), float(bt_new.transpose()*br)],[float(bp_new.transpose()*bt), float(bp_new.transpose()*bp), float(bp_new.transpose()*br)],[float(br_new.transpose()*bt), float(br_new.transpose()*bp), float(br_new.transpose()*br)]])
+
+  return A*M*A.transpose(),colat_new,lon_new
+
+
+main()

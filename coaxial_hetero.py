@@ -86,8 +86,9 @@ def write_output(colat_array,rad_array,vp_array,vs_array,rho_array,**kwargs):
 
 
 #lower_slice
-clat_1,rad_1 = make_bounds(4561,4572,1,20)
-vp_array_1,vs_array_1,rho_array_1 = assign_velocity(clat_1,rad_1,15,15,15)
+clat_1,rad_1 = make_bounds(4566,4572,1,20)
+#dvp, dvs, drho
+vp_array_1,vs_array_1,rho_array_1 = assign_velocity(clat_1,rad_1,0,-2,0)
 
 #upper_slice
 #clat_2,rad_2 = make_bounds(4661,4671,2,10)
@@ -99,7 +100,7 @@ vp_array_1,vs_array_1,rho_array_1 = assign_velocity(clat_1,rad_1,15,15,15)
 #vs = np.vstack((vs_array_1,vs_array_2))
 #rho = np.vstack((rho_array_1,rho_array_2))
 
-write_output(clat_1,rad_1,vp_array_1,vs_array_1,rho_array_1,name='15_15_15_10km.sph')
+write_output(clat_1,rad_1,vp_array_1,vs_array_1,rho_array_1,name='0_-2_0_5km.sph')
 #plt.imshow(np.vstack((vp_array_1,vp_array_2)),aspect='auto',interpolation='none')
 #plt.show()
 

@@ -6,7 +6,7 @@
 File Name : align_on_conversion.py
 Purpose : align traces on S1800P by drag-and-drop
 Creation Date : 07-04-2017
-Last Modified : Fri 07 Apr 2017 11:48:13 AM EDT
+Last Modified : Sat 08 Apr 2017 05:39:15 PM EDT
 Created By : Samuel M. Haugland
 
 ==============================================================================
@@ -30,13 +30,13 @@ def main():
     for idx,tr in enumerate(st):
         e = tr.stats.npts/tr.stats.sampling_rate
         l = tr.stats.station
-        t = np.linspace(0,850,num=tr.stats.npts)
+        #t = np.linspace(0,850,num=tr.stats.npts)
         gcarc = tr.stats.sac['gcarc']
-        ax.plot(t,gcarc+tr.data,color='k',label=l,pickradius=50,picker=True)
+        ax.plot(gcarc+tr.data,color='k',label=l,pickradius=50,picker=True)
 
-    dragh = DragHandler()
+    dragh = DragHandler(figure=fig)
     plt.show()
-    print dragh.shift_dict
+    print zip(dragh.station,dragh.shift)
 
 def read_stream():
     st = obspy.read('/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/sparse_Z.pk')
@@ -45,6 +45,7 @@ def read_stream():
     for idx,tr in enumerate(st):
         st[idx] = seispy.data.phase_window(st[idx],['P'],window=(-50,800))
         tr.stats.location = tr.stats.sac['gcarc']
+    st.interpolate(50)
     st.sort(['location'])
     return st
 
@@ -60,7 +61,8 @@ class DragHandler(object):
         if figure is None : figure = p.gcf()
         # simple attibute to store the dragged text object
         self.dragged = None
-        self.shift_dict = {}
+        self.station = []
+        self.shift = []
 
         # Connect events and callbacks
         figure.canvas.mpl_connect("pick_event", self.on_pick_event)
@@ -73,19 +75,24 @@ class DragHandler(object):
         self.xdata = event.artist.get_data()[0]
         self.ydata = event.artist.get_data()[1]
         self.pick_pos = event.mouseevent.xdata
+        self.station.append(event.artist.get_label())
         return True
 
     def on_release_event(self, event):
         " Update text position and redraw"
 
-        if self.dragged is not None :
-            newx = event.xdata
-            newy = np.roll(self.ydata,int(newx-self.pick_pos))
-            self.shift_dict[event.artist.get_label()] = int(newx-self.pick_pos)
-            self.dragged.set_data(self.xdata,newy)
-            self.dragged = None
-            p.draw()
+        #if self.dragged is not None :
+        newx = event.xdata
+        newy = np.roll(self.ydata,int(newx-self.pick_pos))
+        self.dragged.set_data(self.xdata,newy)
+        self.dragged = None
+        p.draw()
+        self.shift.append(int(newx-self.pick_pos))
         return True
 
 
 main()
+
+
+
+

@@ -25,20 +25,41 @@ from sys import stdout
 from obspy.taup import TauPyModel
 
 def main():
-    Mxyz = cmt2mxyz('CMTSOLUTION')
-    st = obspy.read('')
+    homedir = '/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/'
+    Mxyz = cmt2mxyz(homedir+'CMTSOLUTION')
+    st = obspy.read(homedir+'sparse_R.pk')
+    stat_list = []
+    rat_list = []
 
-    Asv = find_sv_amp(Mxyz,az,toa)
+    for tr in st:
+        azS,toaS = taup_angles(tr,['S'])
+        azS1800P,toaS1800P = taup_angles(tr,['S1800P'])
+        #print toaS,toaS1800P
+
+        S_Asv = find_sv_amp(Mxyz,azS,toaS)
+        #print S_Asv
+        S1800P_Asv = find_sv_amp(Mxyz,azS1800P,toaS1800P)
+        #print S1800P_Asv
+        stat_list.append(tr.stats.station)
+        rat_list.append(S_Asv/S1800P_Asv)
+
+    write_ratio('ratio.dat',zip(stat_list,rat_list))
+
+def write_ratio(fname,ratio_list):
+
+    with open(fname,'w') as f:
+        for ii in ratio_list:
+            f.write("{} {}\n".format(ii[0],ii[1]))
 
 def taup_angles(tr,phase_list):
     model = TauPyModel(model='prem50')
     gcarc = tr.stats.sac['gcarc']
     evdp = tr.stats.sac['evdp']
-    arr = model.get_travel_times(distance_in_degree=gcarc,source_depth_in_km=,evdp,
+    arr = model.get_travel_times(distance_in_degree=gcarc,source_depth_in_km=evdp,
                            phase_list=phase_list)
     toa = arr[0].takeoff_angle
     az = tr.stats.sac['az']
-    return toa,az
+    return np.radians(toa),np.radians(az)
 
 def cmt2mxyz(file):
 	li = open(file,'r').readlines()
@@ -71,8 +92,9 @@ def cmt2mxyz(file):
 	N[-1].append( M[0][0])
 	return N
 
-def find_p_amp(M,az,toa):
+def find_p_amp(Mxyz,az,toa):
     '''az:azimuthal direction, toa:takeoff angle'''
+    Ap = 0
     si,ci = np.sin(toa),np.cos(toa)
     sf,cf = np.sin(az),np.cos(az)
     g = [si*cf, si*sf, ci]
@@ -80,10 +102,11 @@ def find_p_amp(M,az,toa):
     h = [-sf, cf, 0.]
     for k1 in xrange(3):
         for k2 in xrange(3):
-            Ap  += Mxyz[k1][k2]*g[k1]*g[k2]
+            Ap += Mxyz[k1][k2]*g[k1]*g[k2]
     return Ap
 
-def find_sv_amp(M,az,toa):
+def find_sv_amp(Mxyz,az,toa):
+    Asv = 0
     si,ci = np.sin(toa),np.cos(toa)
     sf,cf = np.sin(az),np.cos(az)
     g = [si*cf, si*sf, ci]
@@ -94,7 +117,8 @@ def find_sv_amp(M,az,toa):
             Asv += Mxyz[k1][k2]*g[k1]*v[k2]
     return Asv
 
-def find_sh_amp(M,az,toa):
+def find_sh_amp(Mxyz,az,toa):
+    Ash = 0
     si,ci = np.sin(toa),np.cos(toa)
     sf,cf = np.sin(az),np.cos(az)
     g = [si*cf, si*sf, ci]

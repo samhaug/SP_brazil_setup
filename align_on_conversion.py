@@ -6,7 +6,7 @@
 File Name : align_on_conversion.py
 Purpose : align traces on S1800P by drag-and-drop
 Creation Date : 07-04-2017
-Last Modified : Sun 09 Apr 2017 05:58:42 PM EDT
+Last Modified : Sun 09 Apr 2017 06:49:35 PM EDT
 Created By : Samuel M. Haugland
 
 ==============================================================================
@@ -69,13 +69,12 @@ def window_phase(st):
 def read_stream():
     stz = obspy.read('/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/sparse_Z.pk')
     str = obspy.read('/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/sparse_R.pk')
+    str.filter('highpass',freq=1./20)
+    stz.filter('highpass',freq=1./20)
     stz = seispy.data.align_on_phase(stz,phase=['P'])
-    str.filter('highpass',freq=1./15)
-    stz.filter('highpass',freq=1./15)
     for idx,tr in enumerate(str):
         d = seispy.data.phase_window(str[idx],['S'],window=(-30,30))
         e = np.abs(d.data).max()
-        #st[idx] = seispy.data.phase_window(st[idx],['P'],window=(-50,800))
         stz[idx].data *= 1./e
         tr.stats.location = tr.stats.sac['gcarc']
     stz.interpolate(50)

@@ -34,19 +34,16 @@ def main():
     for tr in st:
         azS,toaS = taup_angles(tr,['S'])
         azS1800P,toaS1800P = taup_angles(tr,['S1800P'])
-        #print toaS,toaS1800P
+        amp_S1800P = find_sv_amp(Mxyz,azS1800P,toaS1800P)
+        amp_S = find_sv_amp(Mxyz,azS,toaS)
 
-        S_Asv = find_sv_amp(Mxyz,azS,toaS)
-        #print S_Asv
-        S1800P_Asv = find_sv_amp(Mxyz,azS1800P,toaS1800P)
-        #print S1800P_Asv
         stat_list.append(tr.stats.station)
-        rat_list.append(S_Asv/S1800P_Asv)
 
+        rat_list.append(amp_S/amp_S1800P)
+        print amp_S/amp_S1800P
     write_ratio('ratio.dat',zip(stat_list,rat_list))
 
 def write_ratio(fname,ratio_list):
-
     with open(fname,'w') as f:
         for ii in ratio_list:
             f.write("{} {}\n".format(ii[0],ii[1]))
@@ -61,7 +58,7 @@ def taup_angles(tr,phase_list):
     az = tr.stats.sac['az']
     return np.radians(toa),np.radians(az)
 
-def cmt2mxyz(file):
+def orig_cmt2mxyz(file):
 	li = open(file,'r').readlines()
 	M = []
 	M.append([])
@@ -92,6 +89,31 @@ def cmt2mxyz(file):
 	N[-1].append( M[0][0])
 	return N
 
+def cmt2mxyz(file):
+    '''modification on what jeroen did in orig_cmt2mxyz'''
+    '''See box 4.4, aki richards page 113'''
+    a = np.genfromtxt(file,skip_header=7)[:,1]
+    Mrr = a[0]
+    Mtt = a[1]
+    Mpp = a[2]
+    Mrt = a[3]
+    Mrp = a[4]
+    Mtp = a[5]
+    Mxyz = np.array([[Mrr,Mrt,Mrp],[Mrt,Mtt,Mtp],[Mrp,Mtp,Mpp]])
+    new_Mxyz = Mxyz.copy()
+    new_Mxyz[0,0] = Mxyz[1,1]
+    new_Mxyz[0,1] = -Mxyz[1,2]
+    new_Mxyz[0,2] = Mxyz[0,1]
+
+    new_Mxyz[1,0] = -Mxyz[1,2]
+    new_Mxyz[1,1] = Mxyz[2,2]
+    new_Mxyz[1,2] = -Mxyz[0,2]
+
+    new_Mxyz[2,0] = Mxyz[0,1]
+    new_Mxyz[2,1] = -Mxyz[0,2]
+    new_Mxyz[2,2] = Mxyz[0,0]
+    return new_Mxyz
+
 def find_p_amp(Mxyz,az,toa):
     '''az:azimuthal direction, toa:takeoff angle'''
     Ap = 0
@@ -100,9 +122,10 @@ def find_p_amp(Mxyz,az,toa):
     g = [si*cf, si*sf, ci]
     v = [ci*cf, ci*sf,-si]
     h = [-sf, cf, 0.]
-    for k1 in xrange(3):
-        for k2 in xrange(3):
-            Ap += Mxyz[k1][k2]*g[k1]*g[k2]
+    #for k1 in xrange(3):
+    #    for k2 in xrange(3):
+    #        Ap += Mxyz[k1][k2]*g[k1]*g[k2]
+    Ap = np.dot(np.array(g),np.dot(np.array(Mxyz),np.array(g)))
     return Ap
 
 def find_sv_amp(Mxyz,az,toa):
@@ -112,9 +135,10 @@ def find_sv_amp(Mxyz,az,toa):
     g = [si*cf, si*sf, ci]
     v = [ci*cf, ci*sf,-si]
     h = [-sf, cf, 0.]
-    for k1 in xrange(3):
-        for k2 in xrange(3):
-            Asv += Mxyz[k1][k2]*g[k1]*v[k2]
+    #for k1 in xrange(3):
+    #    for k2 in xrange(3):
+    #        Asv += Mxyz[k1][k2]*g[k1]*v[k2]
+    Asv = np.dot(np.array(v),np.dot(np.array(Mxyz),np.array(g)))
     return Asv
 
 def find_sh_amp(Mxyz,az,toa):
@@ -124,9 +148,10 @@ def find_sh_amp(Mxyz,az,toa):
     g = [si*cf, si*sf, ci]
     v = [ci*cf, ci*sf,-si]
     h = [-sf, cf, 0.]
-    for k1 in xrange(3):
-        for k2 in xrange(3):
-            Ash += Mxyz[k1][k2]*g[k1]*h[k2]
+    #for k1 in xrange(3):
+    #    for k2 in xrange(3):
+    #        Ash += Mxyz[k1][k2]*g[k1]*h[k2]
+    Ash = np.dot(np.array(h),np.dot(np.array(Mxyz),np.array(g)))
     return Ash
 
 main()

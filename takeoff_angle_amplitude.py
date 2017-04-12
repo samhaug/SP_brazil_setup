@@ -46,11 +46,11 @@ def main():
         print amp_S/amp_S1800P
     write_ratio('ratio.dat',zip(stat_list,rat_list))
     '''
-    beachball()
+    beachball('/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/')
 
-def beachball():
-    def main():
-        homedir = '/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/'
+def beachball(homedir):
+
+    def main(homedir):
         st = obspy.read(homedir+'sparse_R.pk')
         Mxyz = cmt2mxyz(homedir+'CMTSOLUTION')
         fig = plt.figure(figsize=(4,8))
@@ -68,9 +68,9 @@ def beachball():
         plot_coords(sh_coords,ax3)
         ray_coords = get_ray_coordinates(st)
         for ii in ray_coords:
-            ax1.pole(90+ii[0],ii[1],markersize=4.0,color='limegreen')
-            ax2.pole(90+ii[0],ii[1],markersize=4.0,color='limegreen')
-            ax3.pole(90+ii[0],ii[1],markersize=4.0,color='limegreen')
+            ax1.pole(90+ii[0],ii[1],markersize=4.0,color='limegreen',mew=0.)
+            ax2.pole(90+ii[0],ii[1],markersize=4.0,color='limegreen',mew=0.)
+            ax3.pole(90+ii[0],ii[1],markersize=4.0,color='limegreen',mew=0.)
 
         plt.show()
 
@@ -105,7 +105,7 @@ def beachball():
             ray_coord.append([tr.stats.sac['az'],ang])
         return ray_coord
 
-    main()
+    main(homedir)
 
 def write_ratio(fname,ratio_list):
     with open(fname,'w') as f:

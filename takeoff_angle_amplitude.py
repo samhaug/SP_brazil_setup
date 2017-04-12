@@ -23,8 +23,11 @@ import obspy
 import seispy
 from sys import stdout
 from obspy.taup import TauPyModel
+import mplstereonet
+import itertools
 
 def main():
+    '''
     homedir = '/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/'
     Mxyz = cmt2mxyz(homedir+'CMTSOLUTION')
     st = obspy.read(homedir+'sparse_R.pk')
@@ -42,6 +45,67 @@ def main():
         rat_list.append(amp_S/amp_S1800P)
         print amp_S/amp_S1800P
     write_ratio('ratio.dat',zip(stat_list,rat_list))
+    '''
+    beachball()
+
+def beachball():
+    def main():
+        homedir = '/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/'
+        st = obspy.read(homedir+'sparse_R.pk')
+        Mxyz = cmt2mxyz(homedir+'CMTSOLUTION')
+        fig = plt.figure(figsize=(4,8))
+        ax1 = fig.add_subplot(311, projection='stereonet')
+        ax1.set_title('P')
+        ax2 = fig.add_subplot(312, projection='stereonet')
+        ax2.set_title('SV')
+        ax3 = fig.add_subplot(313, projection='stereonet')
+        ax3.set_title('SH')
+        p_coords = stereonet_coords(Mxyz,find_p_amp)
+        sv_coords = stereonet_coords(Mxyz,find_sv_amp)
+        sh_coords = stereonet_coords(Mxyz,find_sh_amp)
+        plot_coords(p_coords,ax1)
+        plot_coords(sv_coords,ax2)
+        plot_coords(sh_coords,ax3)
+        ray_coords = get_ray_coordinates(st)
+        for ii in ray_coords:
+            ax1.pole(90+ii[0],ii[1],markersize=4.0,color='limegreen')
+            ax2.pole(90+ii[0],ii[1],markersize=4.0,color='limegreen')
+            ax3.pole(90+ii[0],ii[1],markersize=4.0,color='limegreen')
+
+        plt.show()
+
+    def stereonet_coords(Mxyz,func):
+        r = np.linspace(0,90,num=190)
+        t = np.linspace(0,360,num=460)
+        coords = list(itertools.product(r,t))
+        mag = []
+        for ii in range(0,len(coords)):
+            mag.append(func(Mxyz,np.radians(coords[ii][1]),np.radians(coords[ii][0])))
+        for ii in range(len(mag)):
+            if mag[ii] <= 0:
+                coords[ii] = 0
+        coords = [i for i in coords if i != 0]
+        coords = np.array(coords)
+        return coords
+
+    def plot_coords(coords,ax):
+        ax.pole(90+coords[:,1],coords[:,0],color='k',marker='o',rasterized=True)
+        ax.set_azimuth_ticklabels([])
+
+    def get_ray_coordinates(st):
+        model = TauPyModel(model='prem50')
+        ray_coord = []
+        for tr in st:
+            evdp = tr.stats.sac['evdp']
+            gcarc = tr.stats.sac['gcarc']
+            arrivals = model.get_travel_times(source_depth_in_km=evdp,
+                                              distance_in_degree=gcarc,
+                                              phase_list=['S1800P'])
+            ang = arrivals[0].takeoff_angle
+            ray_coord.append([tr.stats.sac['az'],ang])
+        return ray_coord
+
+    main()
 
 def write_ratio(fname,ratio_list):
     with open(fname,'w') as f:

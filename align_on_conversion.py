@@ -6,7 +6,7 @@
 File Name : align_on_conversion.py
 Purpose : align traces on S1800P by drag-and-drop
 Creation Date : 07-04-2017
-Last Modified : Sun 09 Apr 2017 06:49:35 PM EDT
+Last Modified : Thu 04 May 2017 01:27:29 PM EDT
 Created By : Samuel M. Haugland
 
 ==============================================================================
@@ -23,7 +23,6 @@ import seispy
 from obspy.taup import TauPyModel
 model = TauPyModel(model='prem50')
 
-
 def main():
     st = read_stream()
     data_dict,gcarc_list = window_phase(st)
@@ -32,7 +31,8 @@ def main():
         #e = tr.stats.npts/tr.stats.sampling_rate
         #l = tr.stats.station
         #t = np.linspace(0,850,num=tr.stats.npts)
-        ax.plot(gcarc_list[idx]+data_dict[keys],color='k',label=keys,pickradius=50,picker=True)
+        ax.plot(gcarc_list[idx]+data_dict[keys],color='k',
+                pickradius=20,label=keys,picker=True)
 
     ax.axvline(len(data_dict[keys])/2.,color='b')
     ax.axvline(len(data_dict[keys])*(1./6),color='b')
@@ -99,23 +99,28 @@ class DragHandler(object):
         figure.canvas.mpl_connect("button_release_event", self.on_release_event)
 
     def on_pick_event(self, event):
+        #print type(event.artist.get_label())
 
-        self.dragged = event.artist
-        self.xdata = event.artist.get_data()[0]
-        self.ydata = event.artist.get_data()[1]
-        self.pick_pos = event.mouseevent.xdata
-        self.station.append(event.artist.get_label())
+        if type(event.artist.get_label()) == unicode:
+            self.dragged = event.artist
+            self.xdata = event.artist.get_data()[0]
+            self.ydata = event.artist.get_data()[1]
+            self.pick_pos = event.mouseevent.xdata
+            self.station.append(event.artist.get_label())
         return True
 
     def on_release_event(self, event):
 
         newx = event.xdata
-        newy = np.roll(self.ydata,int(newx-self.pick_pos))
-        self.dragged.set_data(self.xdata,newy)
-        self.dragged = None
-        p.draw()
-        self.shift.append(int(newx-self.pick_pos))
-        return True
+        try:
+            newy = np.roll(self.ydata,int(newx-self.pick_pos))
+            self.dragged.set_data(self.xdata,newy)
+            self.dragged = None
+            p.draw()
+            self.shift.append(int(newx-self.pick_pos))
+            return True
+        except AttributeError:
+            return True
 
 main()
 

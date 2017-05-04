@@ -6,7 +6,7 @@
 File Name : bootstrap_conversion.py
 Purpose : Use to bootstrap the aligned h5py phases. Need to use align_on_conversion.py
 Creation Date : 09-04-2017
-Last Modified : Sun 09 Apr 2017 03:27:47 PM EDT
+Last Modified : Sun 16 Apr 2017 08:23:42 PM EDT
 Created By : Samuel M. Haugland
 
 ==============================================================================
@@ -22,7 +22,10 @@ import seispy
 
 def main():
     conv = read_h5()
-    bootstrap(conv,100)
+    #a = np.genfromtxt('ratio.dat')
+    #rat = a[:,1]
+    #conv *= rat[:,None]
+    bootstrap(conv,1000)
 
 def read_h5():
     f = h5py.File('align_conversion.h5','r')

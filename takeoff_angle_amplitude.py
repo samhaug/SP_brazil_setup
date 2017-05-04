@@ -25,40 +25,37 @@ from sys import stdout
 from obspy.taup import TauPyModel
 import mplstereonet
 import itertools
+from deco import concurrent,synchronized
 
 def main():
-    '''
     homedir = '/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/'
     Mxyz = cmt2mxyz(homedir+'CMTSOLUTION')
     st = obspy.read(homedir+'sparse_R.pk')
-    stat_list = []
-    rat_list = []
+    model = TauPyModel(model='prem50')
+    ratio_list = find_ratio(st,model,Mxyz)
+    write_ratio('ratio.dat',ratio_list)
+    #beachball('/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/')
 
+def find_ratio(st,model,Mxyz):
+    ratio_list = []
     for tr in st:
-        azS,toaS = taup_angles(tr,['S'])
-        azS1800P,toaS1800P = taup_angles(tr,['S1800P'])
+        azS,toaS = taup_angles(tr,['S'],model)
+        azS1800P,toaS1800P = taup_angles(tr,['S1800P'],model)
         amp_S1800P = find_sv_amp(Mxyz,azS1800P,toaS1800P)
         amp_S = find_sv_amp(Mxyz,azS,toaS)
-
-        stat_list.append(tr.stats.station)
-
-        rat_list.append(amp_S/amp_S1800P)
-        print amp_S/amp_S1800P
-    write_ratio('ratio.dat',zip(stat_list,rat_list))
-    '''
-    beachball('/home/samhaug/work1/SP_brazil_data/2007-07-21-mw60-western-brazil-4/')
+        ratio_list.append([tr.stats.station,amp_S/amp_S1800P,np.sin(2*toaS)/np.sin(2*toaS1800P)])
+    return ratio_list
 
 def beachball(homedir):
-
     def main(homedir):
         st = obspy.read(homedir+'sparse_R.pk')
         Mxyz = cmt2mxyz(homedir+'CMTSOLUTION')
-        fig = plt.figure(figsize=(4,8))
-        ax1 = fig.add_subplot(311, projection='stereonet')
+        fig = plt.figure(figsize=(7,4))
+        ax1 = fig.add_subplot(131, projection='stereonet')
         ax1.set_title('P')
-        ax2 = fig.add_subplot(312, projection='stereonet')
+        ax2 = fig.add_subplot(132, projection='stereonet')
         ax2.set_title('SV')
-        ax3 = fig.add_subplot(313, projection='stereonet')
+        ax3 = fig.add_subplot(133, projection='stereonet')
         ax3.set_title('SH')
         p_coords = stereonet_coords(Mxyz,find_p_amp)
         sv_coords = stereonet_coords(Mxyz,find_sv_amp)
@@ -110,17 +107,16 @@ def beachball(homedir):
 def write_ratio(fname,ratio_list):
     with open(fname,'w') as f:
         for ii in ratio_list:
-            f.write("{} {}\n".format(ii[0],ii[1]))
+            f.write("{} {} {}\n".format(ii[0],ii[1],ii[2]))
 
-def taup_angles(tr,phase_list):
-    model = TauPyModel(model='prem50')
+def taup_angles(tr,phase_list,model):
     gcarc = tr.stats.sac['gcarc']
     evdp = tr.stats.sac['evdp']
     arr = model.get_travel_times(distance_in_degree=gcarc,source_depth_in_km=evdp,
                            phase_list=phase_list)
     toa = arr[0].takeoff_angle
     az = tr.stats.sac['az']
-    return np.radians(toa),np.radians(az)
+    return np.radians(az),np.radians(toa)
 
 def orig_cmt2mxyz(file):
 	li = open(file,'r').readlines()
